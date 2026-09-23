@@ -22,10 +22,12 @@ it('validates, pairs in the selected market, shows placeholders, and disconnects
   await waitFor(() => expect(screen.getByText('Demo connected')).toBeTruthy());
   expect(screen.getByText('Armenia · AM')).toBeTruthy();
   expect(screen.getByText('Demo only · no vehicle connected')).toBeTruthy();
-  for (const title of ['Speak Destination', 'Search Destination', 'Share Location', 'Control Map', 'Speedometer']) {
+  for (const title of ['Speak Destination', 'Search Destination', 'Control Map', 'Speedometer']) {
     fireEvent.press(screen.getByRole('button', { name: `${title}, coming soon` }));
     expect(alert).toHaveBeenLastCalledWith(title, expect.stringContaining('Coming soon'), [{ text: 'Got it' }]);
   }
+  fireEvent.press(screen.getByRole('button', { name: 'Start Sharing Location' }));
+  await waitFor(() => expect(screen.getByText('Pair with a Tesla in live mode to share location.')).toBeTruthy());
   fireEvent.press(screen.getByRole('button', { name: 'Disconnect' }));
   await waitFor(() => expect(screen.getByRole('button', { name: 'Connect' })).toBeDisabled());
   expect(screen.getByText('Disconnected. Ready to pair again.')).toBeTruthy();

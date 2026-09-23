@@ -1,5 +1,5 @@
-import { createDemoPairingService, createDemoRealtimeService } from './demo';
-import { createLocationService } from './location';
+import { createDemoPairingService, createDemoRealtimeService, createDemoLocationService } from './demo';
+import { locationService } from '../location/runtime';
 import { createNavigationService } from './navigation';
 import { createPairingService } from './pairing';
 import { SupabaseRealtimeService } from './realtime';
@@ -11,7 +11,8 @@ export function createServices(demoMode: boolean, supabase: SupabaseConfiguratio
   return {
     pairing: demoMode ? createDemoPairingService() : createPairingService(),
     createRealtime: demoMode ? createDemoRealtimeService : () => new SupabaseRealtimeService(createSupabaseBroadcastFactory(supabase)),
-    location: createLocationService(),
+    location: demoMode ? createDemoLocationService() : locationService,
+    restoreDriving: !demoMode,
     voice: createVoiceService(),
     navigation: createNavigationService(),
     remoteMap: createRemoteMapService(),

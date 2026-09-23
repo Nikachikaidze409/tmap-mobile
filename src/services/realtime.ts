@@ -19,6 +19,7 @@ export class SupabaseRealtimeService implements RealtimeService {
   private generation = 0;
   private stopped = false;
   private appActive = true;
+  private drivingActive = false;
   private subscribed = false;
   private openedOnce = false;
   private startedAt = 0;
@@ -144,11 +145,13 @@ export class SupabaseRealtimeService implements RealtimeService {
   }
 
   private isExpired(): boolean {
-    return Date.now() - (this.diagnostics.lastHeartbeatSent ?? this.startedAt) >= SESSION_LOST_MS;
+    return !this.drivingActive && Date.now() - Math.max(this.diagnostics.lastHeartbeatSent ?? 0, this.startedAt) >= SESSION_LOST_MS;
   }
   private armExpiry(): void {
     if (this.expiry) clearTimeout(this.expiry);
-    this.expiry = setTimeout(() => this.loseSession(), Math.max(0, SESSION_LOST_MS - (Date.now() - (this.diagnostics.lastHeartbeatSent ?? this.startedAt))));
+    this.expiry = null;
+    if (this.drivingActive) return;
+    this.expiry = setTimeout(() => this.loseSession(), Math.max(0, SESSION_LOST_MS - (Date.now() - Math.max(this.diagnostics.lastHeartbeatSent ?? 0, this.startedAt))));
   }
   private loseSession(): void {
     if (this.stopped) return;
@@ -168,6 +171,13 @@ export class SupabaseRealtimeService implements RealtimeService {
       this.releaseConnection();
       this.update({ channelState: 'SUSPENDED' });
     } else void this.open();
+  }
+
+  setDrivingActive(active: boolean): void {
+    if (this.stopped || this.drivingActive === active) return;
+    this.drivingActive = active;
+    if (!active) this.startedAt = Date.now(); // Give foreground reconnect a fresh loss window.
+    if (this.session) this.armExpiry();
   }
 
   async send(event: RemoteEvent): Promise<void> {

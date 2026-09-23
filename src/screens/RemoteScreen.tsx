@@ -7,10 +7,10 @@ import { MARKETS } from '../config/market';
 import { useConnection } from '../state/ConnectionProvider';
 import { colors } from '../theme';
 import { Diagnostics } from '../components/Diagnostics';
+import { LocationSharing } from '../components/LocationSharing';
 
 const actions: { title: string; detail: string; icon: IconName }[] = [
   { title: 'Search Destination', detail: 'Find your next stop', icon: 'search' },
-  { title: 'Share Location', detail: 'Send your position', icon: 'pin' },
   { title: 'Control Map', detail: 'A different perspective', icon: 'map' },
   { title: 'Speedometer', detail: 'Your pace, at a glance', icon: 'speed' },
 ];
@@ -20,7 +20,7 @@ function comingSoon(title: string) {
 }
 
 export function RemoteScreen() {
-  const { state, controller } = useConnection();
+  const { state, location, controller } = useConnection();
   const { fontScale, width } = useWindowDimensions();
   if (!state.session) return null;
   const { session } = state;
@@ -40,7 +40,7 @@ export function RemoteScreen() {
       <View style={styles.connectionIcon}><Icon name="link" color={colors.accent} size={22} /></View>
       <View style={styles.connectionText}>
         <Text style={styles.connected}>{state.message}</Text>
-        <Text style={[styles.connectionDetail, session.mode === 'demo' && styles.demo]}>{session.mode === 'demo' ? 'Demo only · no vehicle connected' : state.status === 'connected' ? 'Tesla channel subscribed · heartbeats active' : 'Heartbeats paused until the channel is ready'}</Text>
+        <Text style={[styles.connectionDetail, session.mode === 'demo' && styles.demo]}>{session.mode === 'demo' ? 'Demo only · no vehicle connected' : state.status === 'connected' ? 'Tesla channel subscribed · heartbeats active' : location.active ? 'Native GPS sharing remains enabled' : 'Heartbeats paused until the channel is ready'}</Text>
       </View>
       <View style={[styles.dot, (session.mode === 'demo' || state.status !== 'connected') && styles.demoDot]} />
     </View>
@@ -60,6 +60,7 @@ export function RemoteScreen() {
         </Pressable>)}
       </View>
     </View>
+    <LocationSharing />
     <Diagnostics />
     <View style={styles.footer}>
       <Button label={state.status === 'disconnecting' ? 'Disconnecting…' : 'Disconnect'} icon="disconnect" secondary loading={state.status === 'disconnecting'} onPress={() => { void controller.disconnect(); }} />

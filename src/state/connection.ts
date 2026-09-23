@@ -2,6 +2,8 @@ import type { Market } from '../types/market';
 import { connectionErrorMessage } from '../services/errors';
 import { isValidPairingCode, normalizePairingCode, type PairingService, type PairingSession } from '../services/pairing';
 import { EMPTY_DIAGNOSTICS, type RealtimeDiagnostics, type RealtimeService, type Unsubscribe } from '../services/realtimeTypes';
+import { INITIAL_LOCATION_STATE, type LocationService } from '../services/location';
+import type { DrivingSession } from '../location/sessionStore';
 
 type Phase =
   | { status: 'disconnected' | 'connecting' | 'error'; session: null }
@@ -11,6 +13,8 @@ interface Dependencies {
   pairing: PairingService;
   createRealtime: () => RealtimeService;
   timeoutMs?: number;
+  location?: LocationService;
+  restoreDriving?: boolean;
 }
 interface Attempt {
   abort: AbortController;
@@ -36,9 +40,38 @@ export class ConnectionController {
   private appActive = true;
   private cleanup: Promise<void> = Promise.resolve();
   private generation = 0;
+  private initialization: Promise<void> | null = null;
+  private locationSubscription: Unsubscribe | null = null;
+  private disconnecting: Promise<void> | null = null;
 
   constructor(private readonly dependencies: Dependencies) {}
   readonly getSnapshot = (): ConnectionState => this.state;
+  readonly getLocationSnapshot = () => this.dependencies.location?.getSnapshot() ?? INITIAL_LOCATION_STATE;
+  readonly subscribeLocation = (listener: () => void): Unsubscribe => this.dependencies.location?.subscribe(listener) ?? (() => {});
+  initialize(): Promise<void> {
+    if (!this.locationSubscription && this.dependencies.location) {
+      this.locationSubscription = this.dependencies.location.subscribe(() => {
+        this.attempt?.realtime?.setDrivingActive(this.getLocationSnapshot().active);
+      });
+    }
+    if (!this.initialization) this.initialization = (async () => {
+      if (!this.dependencies.restoreDriving || !this.dependencies.location) return;
+      const generation = this.generation;
+      const session = await this.dependencies.location.restore();
+      if (generation === this.generation && session) void this.connect(session.code, session.market, session);
+    })();
+    return this.initialization;
+  }
+  async startLocation(): Promise<void> {
+    if (this.state.status !== 'connected' || !this.state.session || this.disconnecting) return;
+    await this.dependencies.location?.start(this.state.session);
+    this.attempt?.realtime?.setDrivingActive(this.getLocationSnapshot().active);
+  }
+  async stopLocation(): Promise<void> {
+    await this.dependencies.location?.stop();
+    this.attempt?.realtime?.setDrivingActive(this.getLocationSnapshot().active);
+  }
+  openLocationSettings = async () => { await this.dependencies.location?.openSettings(); };
   readonly subscribe = (listener: () => void): Unsubscribe => {
     this.listeners.add(listener);
     return () => { this.listeners.delete(listener); };
@@ -48,7 +81,8 @@ export class ConnectionController {
     this.listeners.forEach((listener) => listener());
   }
 
-  async connect(rawCode: string, market: Market): Promise<void> {
+  async connect(rawCode: string, market: Market, restored?: DrivingSession): Promise<void> {
+    if (this.dependencies.restoreDriving && !restored) await this.initialize();
     if (this.state.status !== 'disconnected' && this.state.status !== 'error') return;
     if (!isValidPairingCode(rawCode)) {
       this.update({ ...this.state, status: 'error', session: null, message: 'Enter the 6-letter or number code shown in your Tesla.' });
@@ -58,7 +92,7 @@ export class ConnectionController {
     const attempt: Attempt = { abort: new AbortController(), session: null, realtime: null, unsubscribe: [], timer: null };
     this.attempt = attempt;
     let timedOut = false;
-    attempt.timer = setTimeout(() => { timedOut = true; attempt.abort.abort(); }, this.dependencies.timeoutMs ?? 20_000);
+    if (!restored) attempt.timer = setTimeout(() => { timedOut = true; attempt.abort.abort(); }, this.dependencies.timeoutMs ?? 20_000);
     const code = normalizePairingCode(rawCode);
     this.update({ status: 'connecting', session: null, message: 'Subscribing to Tesla channel…', diagnostics: { ...EMPTY_DIAGNOSTICS, pairingCode: code, channelState: 'SUBSCRIBING' } });
     try {
@@ -78,6 +112,8 @@ export class ConnectionController {
         }
       }));
       attempt.unsubscribe.push(realtime.subscribeDiagnostics((diagnostics) => this.acceptDiagnostics(attempt, diagnostics)));
+      realtime.setDrivingActive(this.getLocationSnapshot().active);
+      if (restored) this.update({ ...this.state, status: 'reconnecting', session: attempt.session, message: 'Restoring Tesla channel…' });
       realtime.setAppActive(this.appActive);
       await abortable(realtime.connect(attempt.session, attempt.abort.signal), attempt.abort.signal);
       // SUBSCRIBED diagnostics are the sole authority for connected UI state.
@@ -124,7 +160,21 @@ export class ConnectionController {
     if (attempt.session) await this.dependencies.pairing.revoke(attempt.session).catch(() => {});
   }
 
-  async disconnect(message = 'Disconnected. Ready to pair again.', notifyPeer = true): Promise<void> {
+  disconnect(message = 'Disconnected. Ready to pair again.', notifyPeer = true): Promise<void> {
+    if (this.disconnecting) return this.disconnecting;
+    const location = this.dependencies.location;
+    if (!location) return this.finishDisconnect(message, notifyPeer);
+    // This also cancels a permission/start operation before it can start tracking.
+    this.disconnecting = (async () => {
+      if (!await location.stop()) {
+        this.update({ ...this.state, message: 'Location could not be stopped. Retry Disconnect or open system Settings.' });
+        return;
+      }
+      await this.finishDisconnect(message, notifyPeer);
+    })().finally(() => { this.disconnecting = null; });
+    return this.disconnecting;
+  }
+  private async finishDisconnect(message: string, notifyPeer: boolean): Promise<void> {
     const attempt = this.attempt;
     if (!attempt) return this.cleanup;
     const generation = ++this.generation;
@@ -142,5 +192,17 @@ export class ConnectionController {
   setAppActive(active: boolean): void {
     this.appActive = active;
     this.attempt?.realtime?.setAppActive(active);
+    if (active) void this.dependencies.location?.refresh();
+  }
+
+  detach(): void {
+    ++this.generation;
+    this.locationSubscription?.();
+    this.locationSubscription = null;
+    // Active native driving belongs to the process/task, not this React tree.
+    const status = this.getLocationSnapshot().status;
+    if (status === 'requesting' || status === 'starting') void this.dependencies.location?.stop();
+    void this.finishDisconnect('Foreground UI closed.', false);
+    this.initialization = null;
   }
 }

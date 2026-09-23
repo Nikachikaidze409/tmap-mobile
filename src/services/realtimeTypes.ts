@@ -23,6 +23,7 @@ export interface RealtimeService {
   getDiagnostics(): RealtimeDiagnostics;
   subscribeDiagnostics(listener: (diagnostics: RealtimeDiagnostics) => void): Unsubscribe;
   setAppActive(active: boolean): void;
+  setDrivingActive(active: boolean): void;
   /** notifyPeer is only for a deliberate phone disconnect. */
   disconnect(notifyPeer?: boolean): Promise<void>;
 }

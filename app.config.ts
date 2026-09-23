@@ -49,6 +49,14 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     },
     plugins: [
       'expo-router',
+      ['expo-location', {
+        locationWhenInUsePermission: 'TMap uses your driving location to keep the navigation position on your paired Tesla updated.',
+        locationAlwaysAndWhenInUsePermission: 'TMap shares your driving location with your paired Tesla while sharing is on, including when this phone is locked or TMap is minimized.',
+        isIosBackgroundLocationEnabled: true,
+        isAndroidBackgroundLocationEnabled: true,
+        isAndroidForegroundServiceEnabled: true,
+      }],
+      ['expo-secure-store', { configureAndroidBackup: true, faceIDPermission: false }],
       ['expo-dev-client', { launchMode: 'launcher' }],
       ['expo-splash-screen', { backgroundColor: '#101514', image: './assets/splash-icon.png', imageWidth: 120 }],
     ],

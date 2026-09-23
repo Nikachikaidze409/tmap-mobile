@@ -12,10 +12,11 @@ export function ConnectionProvider({ children }: PropsWithChildren) {
   })));
   useEffect(() => {
     controller.setAppActive(AppState.currentState === null || AppState.currentState === 'active');
+    void controller.initialize();
     const subscription = AppState.addEventListener('change', (state) => controller.setAppActive(state === 'active'));
     return () => {
       subscription.remove();
-      void controller.disconnect('Session ended.', false);
+      controller.detach();
     };
   }, [controller]);
   return <ConnectionContext.Provider value={controller}>{children}</ConnectionContext.Provider>;
@@ -25,5 +26,6 @@ export function useConnection() {
   const controller = useContext(ConnectionContext);
   if (!controller) throw new Error('useConnection requires ConnectionProvider');
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
-  return { state, controller };
+  const location = useSyncExternalStore(controller.subscribeLocation, controller.getLocationSnapshot, controller.getLocationSnapshot);
+  return { state, location, controller };
 }

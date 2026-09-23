@@ -1,6 +1,9 @@
-/** Reserved native task name. This module is imported before Expo Router.
- * Next increment: add module-scope TaskManager.defineTask here and delegate to
- * a headless handler. Do not register tasks inside a component or start tracking
- * during module evaluation. No location permission is requested in this build.
- */
-export const BACKGROUND_LOCATION_TASK = 'tmap.background-location.v1';
+import * as TaskManager from 'expo-task-manager';
+import { BACKGROUND_LOCATION_TASK } from './taskName';
+import { locationDelivery } from '../location/runtime';
+
+export { BACKGROUND_LOCATION_TASK } from './taskName';
+// Module scope, before Expo Router. Defining a task never starts tracking.
+if (!TaskManager.isTaskDefined(BACKGROUND_LOCATION_TASK)) {
+  TaskManager.defineTask(BACKGROUND_LOCATION_TASK, locationDelivery.handle);
+}

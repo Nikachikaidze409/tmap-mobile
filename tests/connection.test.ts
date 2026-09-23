@@ -31,6 +31,7 @@ function harness(pairOverride?: PairingService['pair']) {
     getDiagnostics: () => diagnostics,
     subscribeDiagnostics: jest.fn((listener) => { receiveDiagnostics = listener; return () => { receiveDiagnostics = undefined; }; }),
     setAppActive: jest.fn(),
+    setDrivingActive: jest.fn(),
   };
   const pairing: PairingService = { pair: jest.fn(pairOverride ?? (async () => session)), revoke: jest.fn(async () => {}) };
   const controller = new ConnectionController({ pairing, createRealtime: () => realtime, timeoutMs: 100 });

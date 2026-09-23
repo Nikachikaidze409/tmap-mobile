@@ -37,10 +37,10 @@ describe('pairing and environment boundaries', () => {
     const session = await createServices(false).pairing.pair({ code: 'abc123', market: 'AM', signal: new AbortController().signal });
     expect(session).toMatchObject({ code: 'ABC123', id: 'pair-abc123', market: 'AM' });
   });
-  it('does not implement remote, navigation, voice or location actions yet', async () => {
+  it('keeps remote, navigation and voice as placeholders and disables real GPS in demo', async () => {
     const services = createServices(true);
-    await expect(services.location.start({ market: 'AM', mode: 'background', onFix: jest.fn(), onError: jest.fn() })).rejects.toMatchObject({ code: 'NOT_IMPLEMENTED' });
-    await expect(services.location.requestPermission('background')).rejects.toMatchObject({ code: 'NOT_IMPLEMENTED' });
+    await services.location.start({ id: 'demo', code: 'TMAP26', market: 'AM', mode: 'demo' });
+    expect(services.location.getSnapshot()).toMatchObject({ active: false, status: 'unavailable' });
     await expect(services.voice.recognizeDestination({ market: 'AM', locale: 'hy-AM', signal: new AbortController().signal })).rejects.toMatchObject({ code: 'NOT_IMPLEMENTED' });
     await expect(services.navigation.search('park', { market: 'GE' }, new AbortController().signal)).rejects.toMatchObject({ code: 'NOT_IMPLEMENTED' });
     await expect(services.remoteMap.setView({ lat: 0, lng: 0, zoom: 10, bearing: 0, follow: true, sentAt: 1 }, { market: 'AM' })).rejects.toMatchObject({ code: 'NOT_IMPLEMENTED' });

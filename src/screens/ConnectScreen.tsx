@@ -10,9 +10,10 @@ import { isValidPairingCode } from '../services/pairing';
 import { useConnection } from '../state/ConnectionProvider';
 import { colors } from '../theme';
 import { Diagnostics } from '../components/Diagnostics';
+import { LocationSharing } from '../components/LocationSharing';
 
 export function ConnectScreen() {
-  const { state, controller } = useConnection();
+  const { state, location, controller } = useConnection();
   const [code, setCode] = useState('');
   const [market, setMarket] = useState(environment.defaultMarket);
   const connecting = state.status === 'connecting';
@@ -75,6 +76,7 @@ export function ConnectScreen() {
       <View style={styles.step}><Text style={styles.number}>01</Text><Text style={styles.stepText}>Open TMap in your Tesla browser.</Text></View>
       <View style={styles.step}><Text style={styles.number}>02</Text><Text style={styles.stepText}>Open phone pairing to get your code.</Text></View>
     </View>
+    {(location.active || location.needsSettings) && <LocationSharing />}
     <Diagnostics />
     <Text style={styles.footer}>PHONE + TESLA. ONE JOURNEY.</Text>
   </Screen>;
